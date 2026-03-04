@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Buzzer</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f0f0f0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    /* Scoreboard – Breite auf 60% der Seite */
+    #scoreboard-view {
+      width: 100%;
+    }
+    #scoreboard {
+      border-collapse: separate;
+      border-spacing: 10px;
+      font-size: 1.5em;
+      margin: 20px auto;
+      width: 60%;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    #scoreboard tr {
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    #scoreboard td {
+      padding: 15px;
+      text-align: center;
+      border-radius: 10px;
+    }
+    .score-row {
+      font-weight: bold;
+      color: #333;
+    }
+	.highlight {
+      animation: highlightAnimation 200ms ease-in-out;
+    }
+    @keyframes highlightAnimation {
+      0% { background-color: black; color: white }
+      100% { background-color: inherit; }
+    }
+    /* Dritte Spalte im Scoreboard: Hintergrund komplett entfernen und Text grau */
+    #scoreboard td:nth-child(3) {
+      background-color: #f0f0f0 !important;
+      color: grey !important;
+      width: 10%;
+    }
+    #scoreboard td:nth-child(3) span {
+      opacity: 0%
+    }
+    #scoreboard td:nth-child(3):hover span {
+      opacity: 100%
+    }
+    /* Klickbare Elemente im Scoreboard */
+    .score-adjust {
+      cursor: pointer;
+      margin: 0 10px;
+      text-decoration: none;
+      color: grey;
+    }
+    .score-name {
+      cursor: pointer;
+    }
+    .btn {
+      padding: 15px 30px;
+      font-size: 1.2em;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      background-color: #007bff;
+      color: white;
+      margin: 20px auto;
+      display: block;
+    }
+    .btn:hover {
+      background-color: #0056b3;
+    }
+    /* Rundenspiel – Container */
+    #round-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      position: relative;
+      padding-top: 20px;
+    }
+    #round-view {
+      width: 100%;
+    }
+    #round-status {
+      font-size: 1.2em;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    /* Rundentabelle im Scoreboard-Stil: 60% Breite, zentriert */
+    #round-table {
+      border-collapse: separate;
+      border-spacing: 10px;
+      margin: 20px auto;
+      width: 60%;
+      border-radius: 10px;
+      overflow: visible;
+    }
+    /* Rundentabelle: Zellen (erste und zweite Spalte) fett, 1.5em, Farbe #333 */
+    #round-table td {
+      padding: 20px;
+      text-align: center;
+      border-radius: 10px;
+      font-weight: bold;
+      font-size: 1.5em;
+      /*color: #333;*/
+    }
+    /* Dritte Spalte in der Rundentabelle: Hintergrund entfernen, schmaler und Text grau */
+    #round-table td:nth-child(3) {
+      background-color: #f0f0f0 !important;
+      width: 10%;
+      color: grey !important;
+    }
+    /* Aktionen in der Rundentabelle: "x" und "✓" ohne Unterstreichung */
+    .action-link {
+      margin: 0 10px;
+      color: grey;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 1em;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+    .action-link.disabled {
+      color: #aaa;
+      pointer-events: none;
+    }
+    .team-wrong {
+      background-color: #e0e0e0 !important;
+      color: #f00 !important;
+    }
+    @keyframes winnerAnimation {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+    .team-winner {
+      animation: winnerAnimation 1s infinite;
+    }
+    .team-gray {
+      background-color: #f0f0f0 !important;
+      color: #999 !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- Scoreboard-Ansicht -->
+  <div id="scoreboard-view">
+    <div style="text-align:center;">
+      <h1>Punktestand</h1>
+    </div>
+    <table id="scoreboard">
+      <tbody>
+        <!-- Teams werden hier eingefügt -->
+      </tbody>
+    </table>
+    <button id="start-round" class="btn">Runde starten</button>
+  </div>
+
+  <!-- Rundenspiel-Ansicht -->
+  <div id="round-view" style="display:none;">
+    <div id="round-container">
+      <div style="text-align:center;">
+        <h3 id="round-status">Warte auf Buzzer...</h3>
+      </div>
+      <table id="round-table">
+        <tbody>
+          <!-- Reihenfolge der Buzzer wird hier aufgebaut -->
+        </tbody>
+      </table>
+      <button id="back-to-scoreboard" class="btn">Zur Tabelle</button>
+    </div>
+  </div>
+  
+  <audio id="wrongAudio">
+    <source src="wrong.mp3" type="audio/mp3">
+  </audio>
+  
+  <audio id="correctAudio">
+    <source src="correct.mp3" type="audio/mp3">
+  </audio>
+
+  <script>
+    // Teams mit angepassten, deutlich unterschiedlichen Pastellfarben:
+    let teams = [
+      {id: 1, name: "Team 1", score: 0, color: "#f8d7da", buzzerAudio: makeBuzzerAudio()},   // Pastellrot
+      {id: 3, name: "Team 3", score: 0, color: "#d1ecf1", buzzerAudio: makeBuzzerAudio()},   // Pastellblau
+      {id: 4, name: "Team 4", score: 0, color: "#fff3cd", buzzerAudio: makeBuzzerAudio()},   // Pastellgelb
+      {id: 2, name: "Team 2", score: 0, color: "#d4edda", buzzerAudio: makeBuzzerAudio()},   // Pastellgrün
+      {id: 5, name: "Team 5", score: 0, color: "#e6e6fa", buzzerAudio: makeBuzzerAudio()},   // Lavendel
+      {id: 6, name: "Team 6", score: 0, color: "#ffdab9", buzzerAudio: makeBuzzerAudio()}    // Pfirsich
+    ];
+
+    let roundActive = false;
+    let startTime = 0;
+    let buzzerOrder = [];
+    let winnerSelected = false; // pro Runde nur ein Sieger
+
+    function makeBuzzerAudio() {
+      return new Audio("buzzer.wav");
+    }
+	
+    // Rendert das Scoreboard (nach Punkten sortiert)
+    function renderScoreboard() {
+      const tbody = document.querySelector("#scoreboard tbody");
+      tbody.innerHTML = "";
+      teams.sort((a, b) => b.score - a.score);
+      teams.forEach(team => {
+        let row = document.createElement("tr");
+        row.className = "score-row";
+		row.id = "team-" + team.id;
+        row.style.backgroundColor = team.color;
+
+        // Teamname als editierbarer Inhalt
+        let cellName = document.createElement("td");
+        cellName.textContent = team.name;
+        cellName.className = "score-name";
+        cellName.contentEditable = "true";
+        cellName.onblur = function() {
+          team.name = cellName.textContent.trim() || team.name;
+          renderScoreboard();
+        };
+        cellName.onkeydown = function(e) {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            cellName.blur();
+          }
+        };
+        row.appendChild(cellName);
+
+        // Punktestand
+        let cellScore = document.createElement("td");
+        cellScore.textContent = team.score;
+        row.appendChild(cellScore);
+
+        // Spalte für Score-Korrektur
+        let cellAdjust = document.createElement("td");
+        // Keine Inline-Hintergrundfarbe – CSS regelt dies
+        let plusLink = document.createElement("span");
+        plusLink.textContent = "+";
+        plusLink.className = "score-adjust";
+        plusLink.onclick = function() {
+          team.score += 1;
+          renderScoreboard();
+        };
+        let minusLink = document.createElement("span");
+        minusLink.textContent = "-";
+        minusLink.className = "score-adjust";
+        minusLink.onclick = function() {
+          team.score -= 1;
+          renderScoreboard();
+        };
+        cellAdjust.appendChild(plusLink);
+        cellAdjust.appendChild(minusLink);
+        row.appendChild(cellAdjust);
+
+        tbody.appendChild(row);
+      });
+    }
+
+    // Startet eine neue Runde
+    function startRound() {
+      roundActive = true;
+      winnerSelected = false;
+      buzzerOrder = [];
+      startTime = Date.now();
+      document.getElementById("scoreboard-view").style.display = "none";
+      document.getElementById("round-view").style.display = "block";
+      document.getElementById("round-status").textContent = "Warte auf Buzzer...";
+      document.querySelector("#round-table tbody").innerHTML = "";
+      document.getElementById("round-container").style.height = "auto";
+    }
+
+    function highlightTeam(teamId) {
+      let row = document.getElementById("team-" + teamId);
+      if (row) {
+        row.classList.add("highlight");
+        setTimeout(() => row.classList.remove("highlight"), 200);
+      }
+    }
+	
+    // Beendet die Runde und zeigt das Scoreboard an
+    function endRound() {
+      roundActive = false;
+      renderScoreboard();
+      document.getElementById("round-view").style.display = "none";
+      document.getElementById("scoreboard-view").style.display = "block";
+    }
+
+    // Zeigt die Aktionen nur für das oberste Team (ohne bereits erfolgte Aktion)
+    function updateRoundActions() {
+      const tbody = document.querySelector("#round-table tbody");
+      const rows = Array.from(tbody.querySelectorAll("tr"));
+      let actionSet = false;
+      rows.forEach(row => {
+        const actionsCell = row.cells[2]; // dritte Zelle: Aktionen
+        if (!actionSet && !row.classList.contains("team-winner") && !row.classList.contains("team-wrong")) {
+          actionsCell.innerHTML = "";
+          const teamId = parseInt(row.id.replace("round-team-",""));
+          const team = teams.find(t => t.id === teamId);
+          const spanWrong = document.createElement("span");
+          spanWrong.textContent = "x";
+          spanWrong.className = "action-link";
+          spanWrong.onclick = function() {
+            row.classList.add("team-wrong");
+            team.score -= 1;
+            updateRoundActions();
+			document.getElementById("wrongAudio").play();
+          };
+          const spanWinner = document.createElement("span");
+          spanWinner.textContent = "✓";
+          spanWinner.className = "action-link";
+          spanWinner.style.marginLeft = "20px";
+          spanWinner.onclick = function() {
+            row.classList.add("team-winner");
+            team.score += 2;
+            updateRoundActions();
+			document.getElementById("correctAudio").play();
+            const allRows = Array.from(tbody.querySelectorAll("tr"));
+            const index = allRows.indexOf(row);
+            for (let i = index + 1; i < allRows.length; i++) {
+              allRows[i].classList.add("team-gray");
+            }
+          };
+          actionsCell.appendChild(spanWrong);
+          actionsCell.appendChild(spanWinner);
+          actionSet = true;
+        } else {
+          actionsCell.innerHTML = "";
+        }
+      });
+    }
+
+    // Fügt ein Team zur Buzzer-Reihenfolge hinzu
+    function addBuzzerTeam(teamId) {
+      if (!roundActive) return;
+      if (buzzerOrder.find(t => t.id === teamId)) return;
+	  
+	  playBuzzerAudio(teamId)
+	  
+      const currentTime = Date.now();
+      const delay = buzzerOrder.length === 0
+                      ? (currentTime - startTime) / 1000
+                      : (currentTime - buzzerOrder[0].time) / 1000;
+      const team = teams.find(t => t.id === teamId);
+      buzzerOrder.push({id: teamId, time: currentTime, delay: delay});
+      
+      const tbody = document.querySelector("#round-table tbody");
+      let row = document.createElement("tr");
+      row.id = "round-team-" + teamId;
+      row.style.backgroundColor = team.color;
+      
+      let cellTeam = document.createElement("td");
+      cellTeam.textContent = team.name;
+      row.appendChild(cellTeam);
+
+      let cellDelay = document.createElement("td");
+      cellDelay.textContent = buzzerOrder.length === 1 ? "0,00 s" : "+ " + delay.toFixed(2).replace('.',',') + " s";
+      row.appendChild(cellDelay);
+
+      let cellActions = document.createElement("td");
+      // Keine Inline-Hintergrundfarbe – CSS regelt dies
+      row.appendChild(cellActions);
+
+      tbody.appendChild(row);
+      updateRoundActions();
+    }
+	
+	function playBuzzerAudio(teamId) {
+	  const team = teams.find(t => t.id === teamId);
+      var audio = team.buzzerAudio;
+      audio.play();
+    }
+	  
+    document.getElementById("start-round").addEventListener("click", startRound);
+    document.getElementById("back-to-scoreboard").addEventListener("click", endRound);
+
+    document.addEventListener("keydown", function(event) {
+      if (["1","2","3","4","5","6"].includes(event.key)) {
+        if (roundActive) 
+			addBuzzerTeam(parseInt(event.key));
+		else 
+			highlightTeam(parseInt(event.key));
+		event.preventDefault();
+      }
+    });
+
+    renderScoreboard();
+  </script>
+</body>
+</html>
