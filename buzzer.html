@@ -24,7 +24,7 @@
       border-spacing: 10px;
       font-size: 1.5em;
       margin: 20px auto;
-      width: 60%;
+      width: 700px;
       border-radius: 10px;
       overflow: hidden;
     }
@@ -83,6 +83,66 @@
     }
     .btn:hover {
       background-color: #0056b3;
+    }
+    .btn-small {
+      background-color: transparent;
+      color: #555;
+      padding: 6px 10px;
+      font-size: 0.9em;
+      margin: 0;
+      display: inline-block;
+    }
+    .btn-small:hover {
+      background-color: #ddd;
+      color: #333;
+    }
+    .view-header {
+      width: 60%;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    #open-settings {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+    #settings-view {
+      width: 100%;
+    }
+    #settings-form {
+      width: 300px;
+      margin: 20px auto;
+      background: transparent;
+      border-radius: 10px;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .settings-row {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 15px;
+    }
+    .settings-row label {
+      margin-bottom: 5px;
+      font-weight: bold;
+      color: #333;
+    }
+    .settings-row input {
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 1em;
+    }
+    .settings-actions {
+      width: 60%;
+      margin: 0 auto;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
     }
     /* Rundenspiel – Container */
     #round-container {
@@ -161,8 +221,9 @@
 <body>
   <!-- Scoreboard-Ansicht -->
   <div id="scoreboard-view">
-    <div style="text-align:center;">
+    <div class="view-header">
       <h1>Punktestand</h1>
+      <button id="open-settings" class="btn btn-small">⚙</button>
     </div>
     <table id="scoreboard">
       <tbody>
@@ -186,6 +247,31 @@
       <button id="back-to-scoreboard" class="btn">Zur Tabelle</button>
     </div>
   </div>
+
+  <!-- Einstellungen -->
+  <div id="settings-view" style="display:none;">
+    <div style="text-align:center;">
+      <h1>Einstellungen</h1>
+    </div>
+    <div id="settings-form">
+      <div class="settings-row">
+        <label for="settings-team-count">Anzahl Teams</label>
+        <input id="settings-team-count" type="number" min="1" max="9">
+      </div>
+      <div class="settings-row">
+        <label for="settings-correct-points">Punkte für richtige Antwort</label>
+        <input id="settings-correct-points" type="number" step="1">
+      </div>
+      <div class="settings-row">
+        <label for="settings-wrong-penalty">Strafpunkte für falsche Antwort</label>
+        <input id="settings-wrong-penalty" type="number" min="0" step="1">
+      </div>
+    </div>
+    <div class="settings-actions">
+      <button id="save-settings" class="btn">Speichern</button>
+      <button id="cancel-settings" class="btn">Abbrechen</button>
+    </div>
+  </div>
   
   <audio id="wrongAudio">
     <source src="wrong.mp3" type="audio/mp3">
@@ -196,15 +282,13 @@
   </audio>
 
   <script>
-    // Teams mit angepassten, deutlich unterschiedlichen Pastellfarben:
-    let teams = [
-      {id: 1, name: "Team 1", score: 0, color: "#f8d7da", buzzerAudio: makeBuzzerAudio()},   // Pastellrot
-      {id: 3, name: "Team 3", score: 0, color: "#d1ecf1", buzzerAudio: makeBuzzerAudio()},   // Pastellblau
-      {id: 4, name: "Team 4", score: 0, color: "#fff3cd", buzzerAudio: makeBuzzerAudio()},   // Pastellgelb
-      {id: 2, name: "Team 2", score: 0, color: "#d4edda", buzzerAudio: makeBuzzerAudio()},   // Pastellgrün
-      {id: 5, name: "Team 5", score: 0, color: "#e6e6fa", buzzerAudio: makeBuzzerAudio()},   // Lavendel
-      {id: 6, name: "Team 6", score: 0, color: "#ffdab9", buzzerAudio: makeBuzzerAudio()}    // Pfirsich
-    ];
+    const teamColors = ["#f8d7da", "#d4edda", "#d1ecf1", "#fff3cd", "#e6e6fa", "#ffdab9", "#fde2e4", "#e2ece9", "#cddafd"];
+    const settings = {
+      teamCount: 6,
+      pointsCorrect: 2,
+      penaltyWrong: 1
+    };
+    let teams = [];
 
     let roundActive = false;
     let startTime = 0;
@@ -213,6 +297,68 @@
 
     function makeBuzzerAudio() {
       return new Audio("buzzer.wav");
+    }
+
+    function createTeam(id, score = 0, name = null) {
+      return {
+        id: id,
+        name: name || "Team " + id,
+        score: score,
+        color: teamColors[(id - 1) % teamColors.length],
+        buzzerAudio: makeBuzzerAudio()
+      };
+    }
+
+    function initializeTeams() {
+      teams = [];
+      for (let index = 1; index <= settings.teamCount; index++) {
+        teams.push(createTeam(index));
+      }
+    }
+
+    function applyTeamCount(newCount) {
+      const normalizedCount = Math.max(1, Math.min(9, newCount));
+      const previousTeamsById = new Map(teams.map(team => [team.id, team]));
+      const updatedTeams = [];
+      for (let index = 1; index <= normalizedCount; index++) {
+        const existing = previousTeamsById.get(index);
+        if (existing) {
+          updatedTeams.push(createTeam(index, existing.score, existing.name));
+        } else {
+          updatedTeams.push(createTeam(index));
+        }
+      }
+      settings.teamCount = normalizedCount;
+      teams = updatedTeams;
+    }
+
+    function openSettingsView() {
+      document.getElementById("settings-team-count").value = settings.teamCount;
+      document.getElementById("settings-correct-points").value = settings.pointsCorrect;
+      document.getElementById("settings-wrong-penalty").value = settings.penaltyWrong;
+      document.getElementById("scoreboard-view").style.display = "none";
+      document.getElementById("settings-view").style.display = "block";
+    }
+
+    function closeSettingsView() {
+      document.getElementById("settings-view").style.display = "none";
+      document.getElementById("scoreboard-view").style.display = "block";
+    }
+
+    function saveSettings() {
+      const teamCountInput = parseInt(document.getElementById("settings-team-count").value, 10);
+      const pointsCorrectInput = parseInt(document.getElementById("settings-correct-points").value, 10);
+      const penaltyWrongInput = parseInt(document.getElementById("settings-wrong-penalty").value, 10);
+
+      const nextTeamCount = Number.isFinite(teamCountInput) ? teamCountInput : settings.teamCount;
+      const nextPointsCorrect = Number.isFinite(pointsCorrectInput) ? pointsCorrectInput : settings.pointsCorrect;
+      const nextPenaltyWrong = Number.isFinite(penaltyWrongInput) ? Math.max(0, penaltyWrongInput) : settings.penaltyWrong;
+
+      settings.pointsCorrect = nextPointsCorrect;
+      settings.penaltyWrong = nextPenaltyWrong;
+      applyTeamCount(nextTeamCount);
+      renderScoreboard();
+      closeSettingsView();
     }
 	
     // Rendert das Scoreboard (nach Punkten sortiert)
@@ -318,7 +464,7 @@
           spanWrong.className = "action-link";
           spanWrong.onclick = function() {
             row.classList.add("team-wrong");
-            team.score -= 1;
+            team.score -= settings.penaltyWrong;
             updateRoundActions();
 			document.getElementById("wrongAudio").play();
           };
@@ -328,7 +474,7 @@
           spanWinner.style.marginLeft = "20px";
           spanWinner.onclick = function() {
             row.classList.add("team-winner");
-            team.score += 2;
+            team.score += settings.pointsCorrect;
             updateRoundActions();
 			document.getElementById("correctAudio").play();
             const allRows = Array.from(tbody.querySelectorAll("tr"));
@@ -389,17 +535,22 @@
 	  
     document.getElementById("start-round").addEventListener("click", startRound);
     document.getElementById("back-to-scoreboard").addEventListener("click", endRound);
+    document.getElementById("open-settings").addEventListener("click", openSettingsView);
+    document.getElementById("save-settings").addEventListener("click", saveSettings);
+    document.getElementById("cancel-settings").addEventListener("click", closeSettingsView);
 
     document.addEventListener("keydown", function(event) {
-      if (["1","2","3","4","5","6"].includes(event.key)) {
+      const teamId = parseInt(event.key, 10);
+      if (Number.isInteger(teamId) && teamId >= 1 && teamId <= settings.teamCount) {
         if (roundActive) 
-			addBuzzerTeam(parseInt(event.key));
+			addBuzzerTeam(teamId);
 		else 
-			highlightTeam(parseInt(event.key));
+			highlightTeam(teamId);
 		event.preventDefault();
       }
     });
 
+    initializeTeams();
     renderScoreboard();
   </script>
 </body>
